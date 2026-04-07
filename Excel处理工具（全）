@@ -1,0 +1,114 @@
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import pandas as pd
+import os
+from datetime import datetime
+
+class ExcelAutoTool:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Excel 自动化处理工具")
+        self.root.geometry("650x700")
+
+        # 变量
+        self.folder_path = tk.StringVar()
+
+        # 顶部 - 选择文件夹
+        tk.Label(root, text="Excel 文件夹路径：").pack(pady=5)
+        tk.Entry(root, textvariable=self.folder_path, width=60).pack()
+        tk.Button(root, text="选择文件夹", command=self.select_folder).pack(pady=5)
+
+        # 功能区
+        tk.Label(root, text="功能列表", font=("Arial", 12, "bold")).pack(pady=8)
+
+        btn_style = {"width": 28, "height": 2}
+        tk.Button(root, text="多Excel文件合并", **btn_style, command=self.merge_files).pack(pady=3)
+        tk.Button(root, text="数据清洗（去空值+去重）", **btn_style, command=self.clean_data).pack(pady=3)
+        tk.Button(root, text="重复数据检测", **btn_style, command=self.check_duplicate).pack(pady=3)
+        tk.Button(root, text="自动生成数据统计表", **btn_style, command=self.data_analysis).pack(pady=3)
+        tk.Button(root, text="自动生成透视表", **btn_style, command=self.create_pivot).pack(pady=3)
+        tk.Button(root, text="一键执行全部功能", **btn_style, command=self.run_all).pack(pady=10)
+
+        # 日志
+        tk.Label(root, text="运行日志：").pack()
+        self.log_text = tk.Text(root, height=8, width=70)
+        self.log_text.pack()
+
+    # 日志输出
+    def log(self, msg):
+        self.log_text.insert(tk.END, f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n")
+        self.log_text.see(tk.END)
+
+    # 选择文件夹
+    def select_folder(self):
+        path = filedialog.askdirectory()
+        if path:
+            self.folder_path.set(path)
+            self.log(f"已选择路径：{path}")
+
+    # 获取所有Excel
+    def get_all_excel(self):
+        path = self.folder_path.get()
+        if not path:
+            messagebox.showwarning("提示", "请先选择文件夹！")
+            return None
+        files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith((".xlsx", ".xls"))]
+        if not files:
+            messagebox.showwarning("提示", "未找到Excel文件！")
+            return None
+        return files
+
+    # ===================== 功能 =====================
+    def merge_files(self):
+        files = self.get_all_excel()
+        if not files: return
+        df_list = [pd.read_excel(f) for f in files]
+        self.df = pd.concat(df_list, ignore_index=True)
+        self.log(f"合并完成：共 {len(self.df)} 行")
+        self.df.to_excel("01_合并结果.xlsx", index=False)
+        messagebox.showinfo("完成", "文件已保存：01_合并结果.xlsx")
+
+    def clean_data(self):
+        if not hasattr(self, "df"): self.merge_files()
+        df_clean = self.df.dropna().drop_duplicates()
+        df_clean.to_excel("02_清洗结果.xlsx", index=False)
+        self.log(f"清洗完成：去空值+去重后 {len(df_clean)} 行")
+        messagebox.showinfo("完成", "文件已保存：02_清洗结果.xlsx")
+
+    def check_duplicate(self):
+        if not hasattr(self, "df"): self.merge_files()
+        dup = self.df[self.df.duplicated(keep=False)]
+        dup.to_excel("03_重复数据.xlsx", index=False)
+        self.log(f"检测到重复数据：{len(dup)} 行")
+        messagebox.showinfo("完成", "文件已保存：03_重复数据.xlsx")
+
+    def data_analysis(self):
+        if not hasattr(self, "df"): self.merge_files()
+        stats = self.df.describe()
+        stats.to_excel("04_数据统计表.xlsx")
+        self.log("数据统计完成：均值/总和/最值/计数")
+        messagebox.showinfo("完成", "文件已保存：04_数据统计表.xlsx")
+
+    def create_pivot(self):
+        if not hasattr(self, "df"): self.merge_files()
+        try:
+            pivot = pd.pivot_table(self.df, index=self.df.columns[0], aggfunc="count")
+            pivot.to_excel("05_透视表.xlsx")
+            self.log("透视表生成完成")
+            messagebox.showinfo("完成", "文件已保存：05_透视表.xlsx")
+        except:
+            messagebox.showerror("错误", "透视表生成失败，请检查数据格式")
+
+    def run_all(self):
+        self.merge_files()
+        self.clean_data()
+        self.check_duplicate()
+        self.data_analysis()
+        self.create_pivot()
+        self.log("✅ 全部功能执行完成！")
+        messagebox.showinfo("完成", "所有文件已生成！")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ExcelAutoTool(root)
+    root.mainloop()
